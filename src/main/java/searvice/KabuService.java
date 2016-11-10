@@ -29,6 +29,7 @@ public class KabuService {
     }
 
     private static final String GET_COMPANY_QUERY = "SELECT * FROM tblcompanies ORDER BY id";
+
     public List<Company> getAllCompanyList() throws SQLException {
         final Statement statement = connection.createStatement();
         final ResultSet rs = statement.executeQuery(GET_COMPANY_QUERY);
@@ -41,6 +42,7 @@ public class KabuService {
     }
 
     private static final String GET_COMPANY_QUERY_BY_ID_QUERY = "SELECT * FROM tblcompanies WHERE id >= ? ORDER BY id";
+
     public List<Company> getCompanyListLteId(final int minId) throws SQLException {
         final PreparedStatement statement = connection.prepareStatement(GET_COMPANY_QUERY_BY_ID_QUERY);
         statement.setInt(1, minId);
@@ -54,6 +56,7 @@ public class KabuService {
     }
 
     private static final String SAVE_COMPANY_QUERY = "INSERT INTO tblcompanies (name, code, market) VALUES(?, ?, ?)";
+
     public void saveCompany(final Company company) throws SQLException {
         final PreparedStatement statement = connection.prepareStatement(SAVE_COMPANY_QUERY);
         statement.setString(1, company.name);
@@ -74,6 +77,7 @@ public class KabuService {
     }
 
     private static final String SAVE_VALUE_QUERY = "INSERT INTO tblvalues (company_id, date, start_value, high_value, low_value, end_value, volume, trading_value) VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
+
     public void saveValue(final Value value) throws SQLException {
         final PreparedStatement statement = connection.prepareStatement(SAVE_VALUE_QUERY);
         statement.setInt(1, value.companyId);
@@ -88,24 +92,28 @@ public class KabuService {
         statement.executeUpdate();
     }
 
-    public void saveValueList(final List<Value> valueList) throws SQLException {
-        final PreparedStatement statement = connection.prepareStatement(SAVE_VALUE_QUERY);
-        for (final Value value : valueList) {
-            statement.setInt(1, value.companyId);
-            statement.setDate(2, value.date);
-            statement.setDouble(3, value.startValue);
-            statement.setDouble(4, value.highValue);
-            statement.setDouble(5, value.lowValue);
-            statement.setDouble(6, value.endValue);
-            statement.setDouble(7, value.volume);
-            statement.setDouble(8, value.tradingValue);
+    public void saveValueList(final List<Value> valueList) {
+        try (final PreparedStatement statement = connection.prepareStatement(SAVE_VALUE_QUERY)) {
+            for (final Value value : valueList) {
+                statement.setInt(1, value.companyId);
+                statement.setDate(2, value.date);
+                statement.setDouble(3, value.startValue);
+                statement.setDouble(4, value.highValue);
+                statement.setDouble(5, value.lowValue);
+                statement.setDouble(6, value.endValue);
+                statement.setDouble(7, value.volume);
+                statement.setDouble(8, value.tradingValue);
 
-            statement.addBatch();
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        statement.executeBatch();
     }
 
     private static final String GET_VALUE_QUERY = "SELECT * FROM tblvalues WHERE company_id = ? AND date = ?";
+
     public boolean contain(final Value value) throws SQLException {
         final PreparedStatement statement = connection.prepareStatement(GET_VALUE_QUERY);
         statement.setInt(1, value.companyId);
@@ -118,21 +126,25 @@ public class KabuService {
     }
 
     public static final String GET_VALUE_BY_COMPANY_QUERY = "SELECT * FROM tblvalues WHERE company_id = ? ORDER BY date";
-    public List<Value> getValueListByCompany(final Company company) throws SQLException {
-        final PreparedStatement statement = connection.prepareStatement(GET_VALUE_BY_COMPANY_QUERY);
-        statement.setInt(1, company.id);
 
-        final ResultSet resultSet = statement.executeQuery();
-        final List<Value> valueList = new ArrayList<>();
-        while (resultSet.next()) {
-            valueList.add(Value.createFromResultSet(resultSet));
+    public List<Value> getValueListByCompany(final Company company) {
+        try(final PreparedStatement statement = connection.prepareStatement(GET_VALUE_BY_COMPANY_QUERY)) {
+            statement.setInt(1, company.id);
+
+            final ResultSet resultSet = statement.executeQuery();
+            final List<Value> valueList = new ArrayList<>();
+            while (resultSet.next()) {
+                valueList.add(Value.createFromResultSet(resultSet));
+            }
+            return valueList;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new IllegalArgumentException();
         }
-        resultSet.close();
-        statement.close();
-        return valueList;
     }
 
-    private static final String GET_VALUE_FOR_LEARNING_QUERY = "SELECT * FROM tblvalues WHERE company_id = ? ORDER BY date LIMIT ?, ?";
+    private static final String GET_VALUE_FOR_LEARNING_QUERY = "SELECT * FROM tblvalues WHERE company_id = ? ORDER BY date LIMIT ?, ?;";
+
     public List<Value> getValueListsForLearning(
             final Company company,
             final int from,
@@ -151,7 +163,48 @@ public class KabuService {
         return valueList;
     }
 
+    private static final String GET_VALUE_FROM_SIZE_QUERY = "SELECT * FROM tblvalues WHERE id BETWEEN ? AND ?;";
+
+    public List<Value> getValues(final int from, final int size) throws SQLException {
+        final PreparedStatement statement = connection.prepareStatement(GET_VALUE_FROM_SIZE_QUERY);
+        statement.setInt(1, from);
+        statement.setInt(2, from + size);
+
+        final ResultSet resultSet = statement.executeQuery();
+        final List<Value> valueList = new ArrayList<>();
+        while (resultSet.next()) {
+            valueList.add(Value.createFromResultSet(resultSet));
+        }
+        resultSet.close();
+        statement.close();
+        return valueList;
+    }
+
+    private static final String UPDATE_CHANGE_RATE_QUERY = "UPDATE tblvalues SET change_rate = ? WHERE id = ?;";
+
+    public void updateChangeRate(final Value value) throws SQLException {
+        final PreparedStatement statement = connection.prepareStatement(UPDATE_CHANGE_RATE_QUERY);
+        statement.setDouble(1, value.changeRate);
+        statement.setInt(2, value.id);
+        statement.execute();
+        statement.close();
+    }
+
+    public void updateChangeRate(final List<Value> valueList) {
+        try (final PreparedStatement statement = connection.prepareStatement(UPDATE_CHANGE_RATE_QUERY);) {
+            for (final Value value : valueList) {
+                statement.setDouble(1, value.changeRate);
+                statement.setInt(2, value.id);
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
     private static final String SAVE_LOG_QUERY = "INSERT INTO tbllearning_log (company_id) VALUES (?)";
+
     public void saveLog(final Company company) throws SQLException {
         final PreparedStatement statement = connection.prepareStatement(SAVE_LOG_QUERY);
         statement.setInt(1, company.id);

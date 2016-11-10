@@ -34,7 +34,7 @@ public class LearningLauncher {
                 final LearningData data = createLearningData(valueList, 50);
                 if (data == null) return;
                 client.learn(data.inputData, data.targets, (short) 20, (short) 100);
-            } catch (SQLException | TException e) {
+            } catch (TException e) {
                 e.printStackTrace();
             }
         });

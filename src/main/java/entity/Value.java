@@ -26,6 +26,8 @@ public class Value {
 
     public Double tradingValue;
 
+    public Double changeRate;
+
 
     public static Value createFromResultSet(final ResultSet resultSet) throws SQLException {
         final Value value = new Value();
@@ -37,6 +39,7 @@ public class Value {
         value.lowValue = resultSet.getDouble("low_value");
         value.volume = resultSet.getDouble("volume");
         value.tradingValue = resultSet.getDouble("trading_value");
+        value.changeRate = resultSet.getDouble("change_rate");
         return value;
     }
 
@@ -50,6 +53,7 @@ public class Value {
                 ",highValue:" + highValue +
                 ",lowValue:" + lowValue +
                 ",volume:" + volume +
-                ",tradingValue:" + tradingValue;
+                ",tradingValue:" + tradingValue +
+                ",changeRate:" + changeRate;
     }
 }
