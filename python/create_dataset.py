@@ -1,37 +1,12 @@
-import MySQLdb
 import tensorflow as tf
-from KabuModelV2 import KabuModelV2
-
-# +---------------------+-----------------------+
-# | stddev(change_rate) | avg(change_rate)      |
-# +---------------------+-----------------------+
-# | 0.06494733817591199 | 0.0005248532996038034 |
-# +---------------------+-----------------------+
-#
-
+import MySQLdb
 
 flags = tf.flags
-flags.DEFINE_string("save_path", None,
-                    "Model output directory.")
-
-flags.DEFINE_string("log_dir", None,
-                    "logging directory")
-
+flags.DEFINE_string("filename", None,
+                    "TFRecord output path")
 FLAGS = flags.FLAGS
 
 
-class Config:
-    hidden_size = 100
-    sequence_length = 100
-    num_layers = 3
-    batch_size = 128
-    input_output_size = 100
-    dropout_rate = 0.1
-    initial_learning_rate = 0.1
-    decay_steps = 1000
-    decay_rate = 0.97
-    clip_norm = 3
-    init_scale = 0.1
 
 
 change_rate_period = [-0.32421183758,
@@ -161,56 +136,20 @@ def get_train_data(company_id, from_, size):
     return input_data, labels
 
 
-def train(model, company_num):
-    company_id = 1
-    from_ = 1
-    saver = tf.train.Saver()
-    sv = tf.train.Supervisor(logdir=FLAGS.log_dir, summary_op=model.summaries, saver=saver, global_step=model.step)
-    with sv.managed_session() as session:
-        for epoch in range(3):
-            while company_id < company_num:
-                if sv.should_stop():
-                    return
-                input_data = []
-                labels = []
-                while len(input_data) < config.batch_size:
-                    (data, label) = get_train_data(company_id, from_, config.sequence_length)
-                    if data is None:
-                        # company_id % 10 == 0 is evaluation data.
-                        from_ = 1
-                        company_id += 1
-                        if company_id % 10 == 0:
-                            company_id += 1
-                        if company_id >= company_num:
-                            return
-                        continue
-                    input_data.append(data)
-                    labels.append(label)
-                    from_ += config.sequence_length
-                fetches = [
-                    model.step,
-                    model.train_optimizer,
-                    model.summaries,
-                    model.learning_rate,
-                    model.loss
-                ]
-                feed_dict = {model.input_data: input_data, model.labels: labels}
-                (global_step, _, summaries, learning_rate, loss) = session.run(fetches, feed_dict)
-                if global_step % 10 == 0:
-                    tf.logging.info('Global Step: %d - '
-                                    'Learning Rate: %.5f - '
-                                    'Loss: %.3f - ',
-                                    global_step, learning_rate, loss)
-
-
 with MySQLdb.connect(db='kabudb', user='root', passwd='root') as cursor:
     cursor.execute("SELECT count(*) FROM tblcompanies")
     company_num = cursor.fetchall()[0][0]
-    with tf.Graph().as_default():
-        config = Config
-        initializer = tf.random_uniform_initializer(-config.init_scale,
-                                                    config.init_scale)
-        with tf.name_scope("Train"):
-            with tf.variable_scope("Model", initializer=initializer):
-                model = KabuModelV2(True, config)
-        train(model, company_num)
+    with tf.python_io.TFRecordWriter('input_data') as writer:
+        while True:
+            for company_id in range(company_num):
+                _from = 1
+                while True:
+                    input_data, labels = get_train_data(company_id, _from, 100)
+                    if input_data is None or labels is None:
+                        break
+                    example = tf.train.Example(features=tf.train.Features(feature={
+                            'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[labels])),
+                            'input_data': tf.train.Feature(float_list=tf.train.FloatList(value=[input_data]))}))
+
+                    writer.write(example.SerializeToString())
+                    _from += 30
