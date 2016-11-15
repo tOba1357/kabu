@@ -131,25 +131,48 @@ def get_train_data(company_id, from_, size):
                          (company_id, from_, size + 1))
     if row != size + 1: return None, None
     result = cursor.fetchall()
-    input_data = [create_one_hot_data(change_rate[0]) for change_rate in result[:-1]]
-    labels = [get_change_rate_period_index(change_rate[0]) for change_rate in result[1:]]
+    # input_data = [get_change_rate_period_index(change_rate[0]) for change_rate in result[:-1]]
+    # labels = [get_change_rate_period_index(change_rate[0]) for change_rate in result[1:]]
+    input_data = [change_rate[0] for change_rate in result[:-1]]
+    labels = [change_rate[0] for change_rate in result[1:]]
     return input_data, labels
+
+def make_example(company_id, from_, size):
+    input_data, labels = get_train_data(company_id, from_, size)
+    if input_data is None or labels is None: return None
+
+    ex = tf.train.SequenceExample()
+    fl_input_data = ex.feature_lists.feature_list["input_data"]
+    fl_labels = ex.feature_lists.feature_list["labels"]
+    for input_data, label in zip(input_data, labels):
+        fl_input_data.feature.add().float_list.value.append(input_data)
+        fl_labels.feature.add().float_list.value.append(label)
+    return ex
 
 
 with MySQLdb.connect(db='kabudb', user='root', passwd='root') as cursor:
     cursor.execute("SELECT count(*) FROM tblcompanies")
     company_num = cursor.fetchall()[0][0]
-    with tf.python_io.TFRecordWriter('input_data') as writer:
-        while True:
-            for company_id in range(company_num):
-                _from = 1
+    with tf.python_io.TFRecordWriter('/home/tatsuya/workspace/resaerch/kabu/python/traindata/normal/train') as writer:
+        for init_from in range(1, 100, 25):
+            print str(init_from)
+            for company_id in range(1, company_num + 1):
+                if company_id % 10 == 0: continue
+                from_ = init_from
                 while True:
-                    input_data, labels = get_train_data(company_id, _from, 100)
-                    if input_data is None or labels is None:
-                        break
-                    example = tf.train.Example(features=tf.train.Features(feature={
-                            'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[labels])),
-                            'input_data': tf.train.Feature(float_list=tf.train.FloatList(value=[input_data]))}))
-
+                    example = make_example(company_id, from_, 100)
+                    if example is None:break
                     writer.write(example.SerializeToString())
-                    _from += 30
+                    from_ += 100
+
+    with tf.python_io.TFRecordWriter('/home/tatsuya/workspace/resaerch/kabu/python/traindata/normal/test') as writer:
+        for init_from in range(1, 100, 25):
+            for company_id in range(10, company_num + 1, 10):
+                print str(company_id)
+                from_ = init_from
+                while True:
+                    example = make_example(company_id, from_, 100)
+                    if example is None: break
+                    writer.write(example.SerializeToString())
+                    from_ += 100
+
